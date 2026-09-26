@@ -146,16 +146,19 @@ Left (60%)              Right (40%)
 
 ### 1. Install Dependencies
 ```bash
+cd sentinelnet
 pip install -r requirements.txt
 ```
 
 ### 2. Run Test Suite
 ```bash
+cd sentinelnet
 python -m pytest tests/ -v
 ```
 
 ### 3. Launch the Live Streamlit Dashboard
 ```bash
+cd sentinelnet
 python -m streamlit run sentinelnet/viz/dashboard.py
 ```
 Open **[http://localhost:8501](http://localhost:8501)** in your browser to view the interactive simulation.
