@@ -1,0 +1,146 @@
+# SentinelNet — 5 Demo Scenarios
+# Each scenario is loaded by build_simulator() in simulator.py
+#
+# Fields:
+#   name: Display name
+#   topology: Filename prefix in config/ (network_small / network_medium / network_large)
+#   defender: 'random' | 'greedy' | 'minimax'
+#   use_expectimax: true/false (only for minimax defender)
+#   minimax_depth: search depth (2-3 recommended)
+#   belief_top_k: number of top suspects used to restrict game tree
+#   detection_rate: P(alert | attacker at node)
+#   false_alarm_rate: P(spurious alert)
+#   stealth_mode: if true, Red's detection rate is halved
+#   resource_limited: if true, Blue can only act every resource_interval ticks
+#   resource_interval: ticks between Blue actions when resource_limited=true
+#   patch_interval: ticks between patch scheduling CSP runs
+#   n_technicians: number of patch technicians available
+#   max_ticks: simulation horizon
+#   seed: RNG seed for reproducibility
+
+scenarios:
+
+  # -----------------------------------------------------------------------
+  # Scenario 1: Baseline — naive Red vs random Blue defender
+  # Shows the floor performance for comparison
+  # -----------------------------------------------------------------------
+  - name: "Baseline: Naive Red vs Random Defender"
+    topology: network_small
+    defender: random
+    use_expectimax: false
+    detection_rate: 0.70
+    false_alarm_rate: 0.05
+    stealth_mode: false
+    resource_limited: false
+    patch_interval: 10
+    n_technicians: 2
+    max_ticks: 150
+    seed: 42
+
+  # -----------------------------------------------------------------------
+  # Scenario 2: Stealthy attacker — low detection rate
+  # Red triggers far fewer alerts; belief tracking is essential
+  # -----------------------------------------------------------------------
+  - name: "Stealthy Attacker: Low Detection Rate"
+    topology: network_small
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 2
+    belief_top_k: 5
+    detection_rate: 0.25      # Very noisy — most moves go undetected
+    false_alarm_rate: 0.15    # High false-alarm rate
+    stealth_mode: true
+    resource_limited: false
+    patch_interval: 5
+    n_technicians: 2
+    max_ticks: 200
+    seed: 42
+
+  # -----------------------------------------------------------------------
+  # Scenario 3: Multi-entry attack — two simultaneous Red entry points
+  # Tests Response agent's prioritisation under split attention
+  # -----------------------------------------------------------------------
+  - name: "Multi-Entry Attack: Two Simultaneous Attackers"
+    topology: network_small
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 3
+    belief_top_k: 8
+    detection_rate: 0.65
+    false_alarm_rate: 0.08
+    stealth_mode: false
+    multi_entry: true          # Simulator spawns Red at ws0 AND ws1
+    resource_limited: false
+    patch_interval: 5
+    n_technicians: 3
+    max_ticks: 200
+    seed: 7
+
+  # -----------------------------------------------------------------------
+  # Scenario 4: Resource-starved defense — Blue can only act every 2 ticks
+  # Tests CSP/scheduling trade-offs under action budget constraint
+  # -----------------------------------------------------------------------
+  - name: "Resource-Starved Defense: One Action per 2 Ticks"
+    topology: network_small
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 2
+    belief_top_k: 5
+    detection_rate: 0.70
+    false_alarm_rate: 0.05
+    stealth_mode: false
+    resource_limited: true
+    resource_interval: 2
+    patch_interval: 8
+    n_technicians: 1
+    max_ticks: 200
+    seed: 42
+
+  # -----------------------------------------------------------------------
+  # Scenario 5: Scalability run — compare 20 / 100 / 500 node topologies
+  # Logs nodes_expanded and wall-clock time per tick for the results table
+  # -----------------------------------------------------------------------
+  - name: "Scalability: 20-Node Graph"
+    topology: network_small
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 2
+    belief_top_k: 5
+    detection_rate: 0.70
+    false_alarm_rate: 0.05
+    stealth_mode: false
+    resource_limited: false
+    patch_interval: 5
+    n_technicians: 2
+    max_ticks: 100
+    seed: 99
+
+  - name: "Scalability: 100-Node Graph"
+    topology: network_medium
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 2
+    belief_top_k: 5
+    detection_rate: 0.70
+    false_alarm_rate: 0.05
+    stealth_mode: false
+    resource_limited: false
+    patch_interval: 5
+    n_technicians: 2
+    max_ticks: 100
+    seed: 99
+
+  - name: "Scalability: 500-Node Graph"
+    topology: network_large
+    defender: minimax
+    use_expectimax: true
+    minimax_depth: 2
+    belief_top_k: 5
+    detection_rate: 0.70
+    false_alarm_rate: 0.05
+    stealth_mode: false
+    resource_limited: false
+    patch_interval: 5
+    n_technicians: 2
+    max_ticks: 100
+    seed: 99

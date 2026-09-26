@@ -1,0 +1,17 @@
+# SentinelNet — 100-Node Medium Network Topology
+# This file is procedurally described; the simulator uses
+# NetworkGraph.generate_random(100, seed=42) as a fallback.
+# To use a custom topology, fill in nodes/edges below.
+
+# The generate_random() factory is invoked by build_simulator() when this
+# file does not contain enough node definitions, so we provide a small
+# seed marker and let the factory handle generation.
+
+_meta:
+  generator: random
+  n_nodes: 100
+  seed: 42
+  description: "100-node auto-generated medium enterprise network"
+
+nodes: []   # Empty: build_simulator() will call NetworkGraph.generate_random(100)
+edges: []

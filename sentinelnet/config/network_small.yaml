@@ -1,0 +1,245 @@
+# SentinelNet — 20-Node Demo Network (Small)
+# Enterprise topology: perimeter workstations → internal servers → databases → crown jewel
+#
+# Node types: workstation | server | database | crown_jewel
+# vuln_score: 0.0 (impenetrable) to 1.0 (trivially exploitable)
+# value: asset value used in utility function
+# entry_point: true = Red can start here
+
+nodes:
+  # --- Perimeter workstations (high vuln, low value) ---
+  - id: ws0
+    type: workstation
+    value: 1
+    vuln_score: 0.75
+    entry_point: true
+    services: [rdp, smb]
+
+  - id: ws1
+    type: workstation
+    value: 1
+    vuln_score: 0.65
+    entry_point: true
+    services: [ssh, http]
+
+  - id: ws2
+    type: workstation
+    value: 2
+    vuln_score: 0.55
+    services: [rdp]
+
+  - id: ws3
+    type: workstation
+    value: 2
+    vuln_score: 0.70
+    services: [smb, ftp]
+
+  - id: ws4
+    type: workstation
+    value: 1
+    vuln_score: 0.60
+    services: [ssh]
+
+  - id: ws5
+    type: workstation
+    value: 2
+    vuln_score: 0.50
+    services: [http, https]
+
+  # --- DMZ servers ---
+  - id: srv_dmz0
+    type: server
+    value: 4
+    vuln_score: 0.45
+    services: [http, dns]
+
+  - id: srv_dmz1
+    type: server
+    value: 5
+    vuln_score: 0.40
+    services: [smtp, https]
+
+  # --- Internal servers (mid-tier) ---
+  - id: srv_int0
+    type: server
+    value: 6
+    vuln_score: 0.30
+    services: [ldap, nfs]
+
+  - id: srv_int1
+    type: server
+    value: 7
+    vuln_score: 0.25
+    services: [kerberos]
+
+  - id: srv_int2
+    type: server
+    value: 5
+    vuln_score: 0.35
+    services: [smb]
+
+  # --- File / application servers ---
+  - id: srv_app0
+    type: server
+    value: 8
+    vuln_score: 0.20
+    services: [tomcat, mysql]
+
+  - id: srv_app1
+    type: server
+    value: 7
+    vuln_score: 0.22
+    services: [nginx, postgres]
+
+  # --- Databases ---
+  - id: db0
+    type: database
+    value: 10
+    vuln_score: 0.15
+    services: [mysql]
+
+  - id: db1
+    type: database
+    value: 9
+    vuln_score: 0.18
+    services: [postgres]
+
+  - id: db2
+    type: database
+    value: 8
+    vuln_score: 0.12
+    services: [oracle]
+
+  # --- Backup / management nodes ---
+  - id: mgmt0
+    type: server
+    value: 5
+    vuln_score: 0.28
+    services: [ssh, winrm]
+
+  - id: mgmt1
+    type: server
+    value: 4
+    vuln_score: 0.32
+    services: [ansible, puppet]
+
+  # --- Honeypot decoy node ---
+  - id: honeypot0
+    type: server
+    value: 0
+    vuln_score: 0.90     # Deliberately high: Red is tempted to go here
+    services: [fake_ssh]
+
+  # --- Crown Jewel ---
+  - id: crown_jewel
+    type: crown_jewel
+    value: 20
+    vuln_score: 0.05
+    services: [secret_vault]
+
+edges:
+  # Perimeter → DMZ
+  - from: ws0
+    to: srv_dmz0
+    cost: 2
+  - from: ws1
+    to: srv_dmz0
+    cost: 3
+  - from: ws1
+    to: srv_dmz1
+    cost: 2
+  - from: ws2
+    to: srv_dmz0
+    cost: 4
+  - from: ws3
+    to: srv_dmz1
+    cost: 3
+  - from: ws4
+    to: srv_dmz0
+    cost: 2
+  - from: ws5
+    to: srv_dmz1
+    cost: 3
+
+  # DMZ → Internal servers
+  - from: srv_dmz0
+    to: srv_int0
+    cost: 3
+  - from: srv_dmz0
+    to: srv_int2
+    cost: 4
+  - from: srv_dmz1
+    to: srv_int1
+    cost: 3
+  - from: srv_dmz1
+    to: srv_int2
+    cost: 2
+
+  # Workstations → Internal (lateral movement paths)
+  - from: ws2
+    to: srv_int0
+    cost: 5
+  - from: ws3
+    to: srv_int1
+    cost: 5
+
+  # Internal → App servers
+  - from: srv_int0
+    to: srv_app0
+    cost: 2
+  - from: srv_int1
+    to: srv_app1
+    cost: 2
+  - from: srv_int2
+    to: srv_app0
+    cost: 3
+  - from: srv_int2
+    to: srv_app1
+    cost: 3
+
+  # App → Databases
+  - from: srv_app0
+    to: db0
+    cost: 2
+  - from: srv_app0
+    to: db2
+    cost: 3
+  - from: srv_app1
+    to: db1
+    cost: 2
+  - from: srv_app1
+    to: db2
+    cost: 3
+
+  # Management nodes
+  - from: mgmt0
+    to: srv_int0
+    cost: 1
+  - from: mgmt0
+    to: srv_int1
+    cost: 1
+  - from: mgmt1
+    to: srv_app0
+    cost: 2
+  - from: mgmt1
+    to: srv_app1
+    cost: 2
+
+  # Honeypot (adjacent to crown jewel path — tempting shortcut)
+  - from: srv_int1
+    to: honeypot0
+    cost: 1
+  - from: honeypot0
+    to: crown_jewel
+    cost: 1
+
+  # Databases → Crown Jewel
+  - from: db0
+    to: crown_jewel
+    cost: 2
+  - from: db1
+    to: crown_jewel
+    cost: 2
+  - from: db2
+    to: crown_jewel
+    cost: 3

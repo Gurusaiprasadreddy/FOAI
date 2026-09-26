@@ -1,0 +1,11 @@
+# SentinelNet — 500-Node Large Network Topology
+# Uses NetworkGraph.generate_random(500, seed=42) for scalability testing.
+
+_meta:
+  generator: random
+  n_nodes: 500
+  seed: 42
+  description: "500-node auto-generated large enterprise network for scalability benchmarking"
+
+nodes: []   # Empty: build_simulator() will call NetworkGraph.generate_random(500)
+edges: []

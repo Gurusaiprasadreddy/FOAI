@@ -1,0 +1,8 @@
+networkx==3.3
+python-constraint==1.4.0
+streamlit==1.38.0
+pyvis==0.3.2
+pyyaml==6.0.2
+pandas==2.2.2
+matplotlib==3.9.0
+pytest==8.3.2
