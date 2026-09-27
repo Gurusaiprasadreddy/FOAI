@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "sentinelnet"
+version = "1.0.0"
+description = "SentinelNet: Multi-Agent Adversarial Network Defense Planner"
+requires-python = ">=3.9"
+dependencies = [
+    "networkx>=3.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "python-constraint>=1.4",
+    "streamlit>=1.28",
+    "pyvis>=0.3",
+    "plotly>=5.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sentinelnet*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

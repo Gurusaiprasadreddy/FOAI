@@ -40,6 +40,10 @@ class GameState:
 
     We store only the minimal information needed for the utility function to
     avoid deep-copying the full NetworkX graph at every tree node.
+
+    GAP 3 FIX: ``crown_jewel_predecessors`` tracks direct predecessors of the
+    crown jewel so that ``blue_actions()`` can offer honeypot deployment on
+    those chokepoint nodes without requiring access to the live graph.
     """
     node_states: Dict[str, str]          # {node_id: state_value}
     node_values: Dict[str, int]          # {node_id: asset_value}
@@ -48,6 +52,11 @@ class GameState:
     crown_jewel: str
     total_action_cost: int = 0
     is_terminal_flag: bool = False
+    crown_jewel_predecessors: List[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.crown_jewel_predecessors is None:
+            self.crown_jewel_predecessors = []
 
     @classmethod
     def from_graph(cls, graph: NetworkGraph, total_cost: int = 0) -> "GameState":
@@ -58,6 +67,11 @@ class GameState:
             values[n] = nd.value
             patched[n] = nd.patched
             vulns[n] = nd.effective_vuln
+        # Collect direct predecessors of crown jewel (honeypot deployment targets)
+        try:
+            cj_preds = list(graph.g.predecessors(graph.crown_jewel))
+        except Exception:
+            cj_preds = []
         return cls(
             node_states=states,
             node_values=values,
@@ -66,6 +80,7 @@ class GameState:
             crown_jewel=graph.crown_jewel,
             total_action_cost=total_cost,
             is_terminal_flag=(states.get(graph.crown_jewel) == NodeState.COMPROMISED.value),
+            crown_jewel_predecessors=cj_preds,
         )
 
     def is_terminal(self) -> bool:
@@ -124,6 +139,10 @@ def blue_actions(state: GameState, top_suspect_nodes: List[str]) -> List[Tuple[s
     """Generate candidate Blue actions focused on suspect areas.
 
     Returns list of (action_type, node) tuples.
+
+    GAP 3 FIX: Also offers deploy_honeypot on SAFE nodes that are direct
+    predecessors of the crown jewel — these are the highest-value chokepoints
+    Red must traverse, making them ideal honeypot candidates.
     """
     actions = []
     for node in top_suspect_nodes:
@@ -134,6 +153,10 @@ def blue_actions(state: GameState, top_suspect_nodes: List[str]) -> List[Tuple[s
             actions.append(("patch", node))
         if s == "compromised":
             actions.append(("restore", node))
+        # Deploy honeypot: only on SAFE, unpatched nodes that are crown-jewel
+        # predecessors (high-traffic choke points Red is likely to visit).
+        if s == "safe" and node in state.crown_jewel_predecessors:
+            actions.append(("deploy_honeypot", node))
     if not actions:
         # Fallback: no-op
         actions.append(("noop", ""))
@@ -156,7 +179,13 @@ def red_actions(state: GameState, top_suspect_nodes: List[str]) -> List[Tuple[st
 # ---------------------------------------------------------------------------
 
 def apply_blue_action(state: GameState, action: Tuple[str, str]) -> GameState:
-    """Return a new state after Blue applies action."""
+    """Return a new state after Blue applies action.
+
+    GAP 3 FIX: Handles ``deploy_honeypot`` action in the minimax game tree.
+    In the simulated tree, a honeypot node becomes HONEYPOT state, making it
+    unavailable for Red to traverse (Red's A* skips HONEYPOT nodes by entering
+    them and getting captured — modelled as a very high-value defensive move).
+    """
     action_type, node = action
     new_states = dict(state.node_states)
     new_patched = dict(state.node_patched)
@@ -172,6 +201,11 @@ def apply_blue_action(state: GameState, action: Tuple[str, str]) -> GameState:
     elif action_type == "restore" and node:
         new_states[node] = NodeState.SAFE.value
         cost += 3
+    elif action_type == "deploy_honeypot" and node:
+        # In the game tree: mark node as honeypot (deters Red from that path)
+        # Cost = 1 (lightweight decoy deployment)
+        new_states[node] = NodeState.HONEYPOT.value
+        cost += 1
     elif action_type == "noop":
         pass
 
@@ -185,6 +219,7 @@ def apply_blue_action(state: GameState, action: Tuple[str, str]) -> GameState:
         crown_jewel=state.crown_jewel,
         total_action_cost=cost,
         is_terminal_flag=new_is_terminal,
+        crown_jewel_predecessors=state.crown_jewel_predecessors,
     )
 
 
@@ -202,6 +237,7 @@ def apply_red_action(state: GameState, node: str, success: bool) -> GameState:
         crown_jewel=state.crown_jewel,
         total_action_cost=state.total_action_cost,
         is_terminal_flag=new_is_terminal,
+        crown_jewel_predecessors=state.crown_jewel_predecessors,
     )
 
 

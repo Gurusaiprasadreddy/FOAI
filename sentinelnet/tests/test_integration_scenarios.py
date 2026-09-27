@@ -153,7 +153,143 @@ class TestStealthyScenario:
 
 
 # ---------------------------------------------------------------------------
-# Scenario 3: Resource-starved defense
+# Scenario 3: Multi-entry attack — two simultaneous Red attackers (GAP 1 FIX)
+# ---------------------------------------------------------------------------
+
+class TestMultiEntryScenario:
+    def test_multi_entry_spawns_two_reds(self):
+        """build_simulator with multi_entry=True must create two Red agents."""
+        import os
+        scenarios_path = os.path.join(CONFIG_DIR, "scenarios.yaml")
+        import yaml
+        with open(scenarios_path) as f:
+            data = yaml.safe_load(f)
+        # Find the multi-entry scenario
+        multi_cfg = next(
+            (s for s in data["scenarios"] if s.get("multi_entry")), None
+        )
+        if multi_cfg is None:
+            pytest.skip("No multi_entry scenario defined in scenarios.yaml")
+
+        from sentinelnet.environment.simulator import build_simulator
+        sim = build_simulator(multi_cfg, scenarios_path)
+
+        # Must have 2 Red agents in _all_reds
+        assert len(sim._all_reds) == 2, (
+            f"Expected 2 Red agents for multi_entry scenario, got {len(sim._all_reds)}"
+        )
+        # Both must start at different entry nodes
+        assert sim._all_reds[0].current_node != sim._all_reds[1].current_node, (
+            "Both Red agents started at the same node — entry points not distinct"
+        )
+
+    def test_multi_entry_sim_runs_to_completion(self):
+        """Multi-entry simulation must complete without errors."""
+        graph = NetworkGraph(SMALL_YAML)
+        entry_points = graph.entry_points
+        if len(entry_points) < 2:
+            pytest.skip("Network has fewer than 2 entry points")
+
+        bus = MessageBus()
+        red1 = RedAttacker(entry_node=entry_points[0], seed=42)
+        red2 = RedAttacker(entry_node=entry_points[1], seed=43)
+        red1.set_graph(graph)
+        red2.set_graph(graph)
+        monitor = MonitorAgent(graph=graph, bus=bus, seed=42)
+        response = ResponseAgent(depth=2, top_k=8, use_expectimax=True, bus=bus)
+        patch_scheduler = PatchSchedulerAgent(bus=bus)
+        logger = MetricsLogger("multi_entry", "minimax")
+
+        from sentinelnet.environment.simulator import Simulator
+        sim = Simulator(
+            graph, red1, monitor, response, patch_scheduler, bus, logger,
+            max_ticks=100, extra_reds=[red2]
+        )
+        summary = sim.run()
+        assert summary is not None
+        assert summary["total_ticks"] >= 1
+
+    def test_multi_entry_tick_info_contains_red_nodes(self):
+        """_tick_info must return a 'red_nodes' list with positions of all reds."""
+        graph = NetworkGraph(SMALL_YAML)
+        entry_points = graph.entry_points
+        if len(entry_points) < 2:
+            pytest.skip("Network has fewer than 2 entry points")
+
+        bus = MessageBus()
+        red1 = RedAttacker(entry_node=entry_points[0], seed=42)
+        red2 = RedAttacker(entry_node=entry_points[1], seed=43)
+        red1.set_graph(graph)
+        red2.set_graph(graph)
+        monitor = MonitorAgent(graph=graph, bus=bus, seed=42)
+        response = ResponseAgent(depth=1, bus=bus)
+        patch_scheduler = PatchSchedulerAgent(bus=bus)
+        logger = MetricsLogger()
+
+        from sentinelnet.environment.simulator import Simulator
+        sim = Simulator(
+            graph, red1, monitor, response, patch_scheduler, bus, logger,
+            max_ticks=5, extra_reds=[red2]
+        )
+        info = sim.step()
+        assert "red_nodes" in info
+        assert isinstance(info["red_nodes"], list)
+        assert len(info["red_nodes"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Honeypot deployment test (GAP 3 FIX)
+# ---------------------------------------------------------------------------
+
+class TestHoneypotDeployment:
+    def test_response_agent_can_deploy_honeypot(self):
+        """ResponseAgent must offer deploy_honeypot for crown-jewel predecessors."""
+        graph = NetworkGraph(SMALL_YAML)
+        bus = MessageBus()
+
+        # Seed belief so that crown-jewel predecessor nodes are in top suspects
+        cj = graph.crown_jewel
+        cj_preds = list(graph.g.predecessors(cj))
+        if not cj_preds:
+            pytest.skip("No predecessor nodes for crown jewel in this topology")
+
+        # Concentrate belief on a crown-jewel predecessor
+        belief = {n: 0.0 for n in graph.all_nodes()}
+        belief[cj_preds[0]] = 1.0
+        bus.publish("belief", belief, tick=0)
+
+        agent = ResponseAgent(depth=1, top_k=5, use_expectimax=True, bus=bus)
+        agent.tick = 1
+
+        from sentinelnet.agents.response import GameState, blue_actions
+        state = GameState.from_graph(graph, total_cost=0)
+
+        # The predecessor node should appear in blue_actions with deploy_honeypot
+        actions = blue_actions(state, cj_preds[:3])
+        action_types = [a[0] for a in actions]
+        assert "deploy_honeypot" in action_types, (
+            f"Expected deploy_honeypot for crown-jewel predecessor, "
+            f"got actions: {actions}"
+        )
+
+    def test_deploy_honeypot_applies_to_graph(self):
+        """graph.deploy_honeypot() must change node state to HONEYPOT."""
+        graph = NetworkGraph(SMALL_YAML)
+        cj = graph.crown_jewel
+        cj_preds = list(graph.g.predecessors(cj))
+        if not cj_preds:
+            pytest.skip("No predecessor nodes for crown jewel")
+        target = cj_preds[0]
+        success = graph.deploy_honeypot(target)
+        assert success, f"deploy_honeypot returned False for {target}"
+        from sentinelnet.environment.network_graph import NodeState
+        assert graph.node_data(target).state == NodeState.HONEYPOT, (
+            f"Node {target} state should be HONEYPOT after deploy_honeypot"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Scenario 4: Resource-starved defense
 # ---------------------------------------------------------------------------
 
 class TestResourceStarvedScenario:
@@ -171,6 +307,7 @@ class TestResourceStarvedScenario:
         sim = Simulator(graph, red, monitor, response, patch_scheduler, bus, logger, max_ticks=80)
         summary = sim.run()
         assert summary is not None
+
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +385,12 @@ class TestMessageBusIntegration:
         logger = MetricsLogger()
         sim = Simulator(graph, red, monitor, response, patch_sched, bus, logger, max_ticks=20)
         sim.run()
-        # Response agent should have published at least one action
-        assert bus.topic_length("actions") >= 0  # May be 0 if belief was empty every tick
+        # Response agent should have published at least one action over 20 ticks
+        # (belief was populated by monitor so response had data to act on)
+        assert bus.topic_length("actions") >= 1, (
+            "ResponseAgent should publish at least one action in 20 ticks "
+            "when monitor belief is available"
+        )
 
 
 # ---------------------------------------------------------------------------

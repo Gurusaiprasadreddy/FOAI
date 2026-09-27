@@ -144,7 +144,7 @@ class MetricsLogger:
             "scenario": self.scenario_name,
             "strategy": self.strategy_name,
             "total_ticks": total_ticks,
-            "compromise_rate": max_compromised / max(1, len(self._records[0].__dataclass_fields__)) if self._records else 0,
+            "compromise_rate": sum(1 for r in self._records if r.compromised_count > 0) / max(1, total_ticks),
             "crown_jewel_compromised": ever_compromised,
             "max_compromised_nodes": max_compromised,
             "mean_ttd_ticks": self._time_to_detect if self._time_to_detect else total_ticks,
